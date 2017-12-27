@@ -3,6 +3,9 @@
 
 static char input[2048];
 
+long eval(mpc_ast_t* tree);
+long eval_op(char* operator, long accumulate, long operand);
+
 int main(int argc, char** argv) {
 
   puts("Welcome to this (so far) untitled Lisp");
@@ -29,7 +32,10 @@ int main(int argc, char** argv) {
 
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, code, &r)) {
-      mpc_ast_print(r.output);     
+      // TODO: hide this behind a debug flag?
+      // mpc_ast_print(r.output);
+      printf("%li\n", eval(r.output));
+
       mpc_ast_delete(r.output);
     } else {
       mpc_err_print(r.error);
@@ -38,6 +44,40 @@ int main(int argc, char** argv) {
   }
 
   mpc_cleanup(4, number, operator, expr, code);
+
+  return 0;
+}
+
+long eval(mpc_ast_t* tree) {
+  if (strstr(tree->tag, "number")) {
+    return atoi(tree->contents);
+  }
+
+  char* operator = tree->children[1]->contents;
+  long accumulate = eval(tree->children[2]);
+
+  int childIndex = 3;
+  while (strstr(tree->children[childIndex]->tag, "expr")) {
+    accumulate = eval_op(operator, accumulate, eval(tree->children[childIndex]));
+    childIndex++;
+  }
+  
+  return accumulate;
+}
+
+long eval_op(char* operator, long accumulate, long operand) {
+  if (strcmp(operator, "+") == 0) {
+    return accumulate + operand;
+  }
+  if (strcmp(operator, "-") == 0) {
+    return accumulate - operand;
+  }
+  if (strcmp(operator, "*") == 0) {
+    return accumulate * operand;
+  }
+  if (strcmp(operator, "/") == 0) {
+    return accumulate / operand;
+  }
 
   return 0;
 }
