@@ -3,8 +3,24 @@
 
 static char input[2048];
 
-long eval(mpc_ast_t* tree);
-long eval_op(char* operator, long accumulate, long operand);
+typedef struct {
+  int type;
+  union {
+    long num;
+    int error;
+  };
+} lval;
+
+lval eval(mpc_ast_t* tree);
+lval eval_op(char* operator, lval accumulate, lval operand);
+
+enum { LVAL_NUM, LVAL_ERR };
+lval lval_num(long x);
+enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
+lval lval_err(int x);
+void lval_print(lval v);
+void lval_println(lval v);
+
 
 int main(int argc, char** argv) {
 
@@ -27,14 +43,14 @@ int main(int argc, char** argv) {
   while (1) {
     fputs("lisp> ", stdout);
     fflush(stdout);
-    
+
     char* x = fgets(input, 2048, stdin);
 
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, code, &r)) {
       // TODO: hide this behind a debug flag?
       // mpc_ast_print(r.output);
-      printf("%li\n", eval(r.output));
+      lval_println(eval(r.output));
 
       mpc_ast_delete(r.output);
     } else {
@@ -48,36 +64,80 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-long eval(mpc_ast_t* tree) {
+lval eval(mpc_ast_t* tree) {
   if (strstr(tree->tag, "number")) {
-    return atoi(tree->contents);
+    errno = 0;
+    long num = strtol(tree->contents, NULL, 10);
+    return (errno == ERANGE) ? lval_err(LERR_BAD_NUM) : lval_num(num);
   }
 
   char* operator = tree->children[1]->contents;
-  long accumulate = eval(tree->children[2]);
+  lval accumulate = eval(tree->children[2]);
 
   int childIndex = 3;
   while (strstr(tree->children[childIndex]->tag, "expr")) {
     accumulate = eval_op(operator, accumulate, eval(tree->children[childIndex]));
     childIndex++;
   }
-  
+
   return accumulate;
 }
 
-long eval_op(char* operator, long accumulate, long operand) {
+lval eval_op(char* operator, lval accumulate, lval operand) {
+  if (accumulate.type == LVAL_ERR) return accumulate;
+  if (operand.type == LVAL_ERR) return operand;
+
   if (strcmp(operator, "+") == 0) {
-    return accumulate + operand;
+    return lval_num(accumulate.num + operand.num);
   }
   if (strcmp(operator, "-") == 0) {
-    return accumulate - operand;
+    return lval_num(accumulate.num - operand.num);
   }
   if (strcmp(operator, "*") == 0) {
-    return accumulate * operand;
+    return lval_num(accumulate.num * operand.num);
   }
   if (strcmp(operator, "/") == 0) {
-    return accumulate / operand;
+    return (operand.num == 0) ? lval_err(LERR_DIV_ZERO)
+                              : lval_num(accumulate.num / operand.num);
   }
 
-  return 0;
+  return lval_err(LERR_BAD_OP);
+}
+
+lval lval_num(long n) {
+  lval v;
+  v.type = LVAL_NUM;
+  v.num = n;
+  return v;
+}
+
+lval lval_err(int code) {
+  lval v;
+  v.type = LVAL_ERR;
+  v.error = code;
+  return v;
+}
+
+void lval_print(lval v) {
+  switch(v.type) {
+  case LVAL_NUM:
+    printf("%li", v.num);
+    break;
+
+  case LVAL_ERR:
+    if (v.error == LERR_DIV_ZERO) {
+      printf("Error: Division By Zero!");
+    }
+    if (v.error == LERR_BAD_OP) {
+      printf("Error: Invalid Operator!");
+    }
+    if (v.error == LERR_BAD_NUM) {
+      printf("Error: Invalid Number!");
+    }
+    break;
+  }
+}
+void lval_println(lval v) {
+  lval_print(v);
+  putchar('\n');
 }
