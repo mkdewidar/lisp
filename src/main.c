@@ -26,20 +26,20 @@ enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR };
 #define LERR_BAD_OP "Invalid operation"
 #define LERR_BAD_NUM "Invalid number"
 
-lval* lval_take(lval* v, int i);
-lval* lval_eval_sexpr(lval* v);
-lval* lval_eval(lval* v);
-lval* eval_op(char* operator, lval* accumulate, lval* operand);
-lval* lval_read(mpc_ast_t* tree);
+lval* eval_sexpr(lval* v);
+lval* eval(lval* v);
+lval* read(mpc_ast_t* tree);
+lval* builtin_op(lval* args, char* op);
+
 lval* lval_num(long n);
 lval* lval_err(char* code);
 lval* lval_sym(char* symbol);
 lval* lval_sexpr(void);
 lval* lval_take(lval* v, int i);
 lval* lval_pop(lval* v, int i);
-lval* builtin_op(lval* args, char* op);
 void lval_add(lval* sexpr, lval* addition);
 void lval_del(lval* v);
+
 void lval_print(lval* v);
 void lval_println(lval* v);
 void lval_print_expr(lval* v, char open, char close);
@@ -75,11 +75,11 @@ int main(int argc, char** argv) {
     if (mpc_parse("<stdin>", input, code, &r)) {
       // TODO: These print statements can be hidden behind debug flags
       // mpc_ast_print(r.output);
-      lval* expr = lval_read(r.output);
+      lval* expr = read(r.output);
       // lval_print_expr(expr, '(', ')');
       // putchar('\n');
       
-      expr = lval_eval(expr);
+      expr = eval(expr);
       lval_println(expr);
 
       lval_del(expr);
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-lval* lval_read(mpc_ast_t* tree) {
+lval* read(mpc_ast_t* tree) {
   if (strstr(tree->tag, "number")) {
     errno = 0;
     long num = strtol(tree->contents, NULL, 10);
@@ -118,10 +118,48 @@ lval* lval_read(mpc_ast_t* tree) {
         || (strcmp(tree->children[i]->tag, "regex") == 0)) {
       continue;
     }
-    lval_add(expressions, lval_read(tree->children[i]));
+    lval_add(expressions, read(tree->children[i]));
   }
 
   return expressions;
+}
+
+lval* eval(lval* v) {
+  if (v->type == LVAL_SEXPR) {
+    return eval_sexpr(v);
+  }
+  return v;
+}
+
+lval* eval_sexpr(lval* v) {
+  for (int i = 0; i < v->count; i++) {
+    v->exprs[i] = eval(v->exprs[i]);
+  }
+
+  for (int i = 0; i < v->count; i++) {
+    if (v->exprs[i]->type == LVAL_ERR) {
+      return lval_take(v, i);
+    }
+  }
+
+  if (v->count == 0) {
+    return v;
+  }
+
+  if (v->count == 1) {
+    return lval_take(v, 0);
+  }
+
+  lval* f = lval_pop(v, 0);
+  if (f->type != LVAL_SYM) {
+    lval_del(f);
+    lval_del(v);
+    return lval_err("S-Expression doesn't start with symbol.");
+  }
+  
+  lval* result = builtin_op(v, f->symbol);
+  lval_del(f);
+  return result;
 }
 
 lval* builtin_op(lval* args, char* op) {
@@ -167,62 +205,6 @@ lval* builtin_op(lval* args, char* op) {
   return x;
 }
 
-lval* lval_eval_sexpr(lval* v) {
-  for (int i = 0; i < v->count; i++) {
-    v->exprs[i] = lval_eval(v->exprs[i]);
-  }
-
-  for (int i = 0; i < v->count; i++) {
-    if (v->exprs[i]->type == LVAL_ERR) {
-      return lval_take(v, i);
-    }
-  }
-
-  if (v->count == 0) {
-    return v;
-  }
-
-  if (v->count == 1) {
-    return lval_take(v, 0);
-  }
-
-  lval* f = lval_pop(v, 0);
-  if (f->type != LVAL_SYM) {
-    lval_del(f);
-    lval_del(v);
-    return lval_err("S-Expression doesn't start with symbol.");
-  }
-  
-  lval* result = builtin_op(v, f->symbol);
-  lval_del(f);
-  return result;
-}
-
-lval* lval_eval(lval* v) {
-  if (v->type == LVAL_SEXPR) {
-    return lval_eval_sexpr(v);
-  }
-  return v;
-}
-
-lval* lval_pop(lval* v, int i) {
-  lval* x = v->exprs[i];
-
-  memmove(&v->exprs[i], &v->exprs[i + 1], sizeof(lval*) * (v->count - i - 1));
-
-  v->count--;
-
-  // This frees the last memory location that we no longer need when we did the memmove
-  v->exprs = realloc(v->exprs, sizeof(lval*) * v->count);
-  return x;
-}
-
-lval* lval_take(lval* v, int i) {
-  lval* x = lval_pop(v, i);
-  lval_del(v);
-  return x;
-}
-
 lval* lval_num(long n) {
   lval* v = malloc(sizeof(lval));
   v->type = LVAL_NUM;
@@ -252,6 +234,24 @@ lval* lval_sexpr(void) {
   v->count = 0;
   v->exprs = NULL;
   return v;
+}
+
+lval* lval_take(lval* v, int i) {
+  lval* x = lval_pop(v, i);
+  lval_del(v);
+  return x;
+}
+
+lval* lval_pop(lval* v, int i) {
+  lval* x = v->exprs[i];
+
+  memmove(&v->exprs[i], &v->exprs[i + 1], sizeof(lval*) * (v->count - i - 1));
+
+  v->count--;
+
+  // This frees the last memory location that we no longer need when we did the memmove
+  v->exprs = realloc(v->exprs, sizeof(lval*) * v->count);
+  return x;
 }
 
 void lval_add(lval* sexpr, lval* addition) {
