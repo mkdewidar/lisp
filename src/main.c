@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     symbol: '+' | '-' | '*' | '/'; \
     sexpr: '(' <expr>* ')'; \
     expr: <number> | <symbol> | <sexpr>; \
-    code: /^/ <expr>+ /$/;",
+    code: /^/ <expr>* /$/;",
     number, symbol, sexpr, expr, code);
 
 
