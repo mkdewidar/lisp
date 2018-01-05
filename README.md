@@ -1,2 +1,2 @@
 # lisp
-A personal Lisp inspired by the free online resource Build Your Own Lisp
+A basic Lisp based on the free online resource [Build Your Own Lisp](http://www.buildyourownlisp.com).
