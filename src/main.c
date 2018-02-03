@@ -33,6 +33,7 @@ typedef struct lval {
 } lval;
 
 enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_FUNC, LVAL_SEXPR, LVAL_QEXPR };
+
 #define LERR_DIV_ZERO "Division by zero!"
 #define LERR_BAD_OP "Invalid operation"
 #define LERR_BAD_NUM "Invalid number"
@@ -41,6 +42,8 @@ enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_FUNC, LVAL_SEXPR, LVAL_QEXPR };
 #define LERR_TOO_MANY_ARGS(funcname) strcat(strcat("Function ", funcname), " has too many args")
 #define LERR_TOO_FEW_ARGS(funcname) strcat(strcat("Function ", funcname), " has too few args")
 #define LERR_INCORRECT_ARGS_TYPES(funcname) strcat(strcat("Function ", funcname), " passed incorrect types")
+#define LERR_CANNOT_DEFINE_NON_SYM "Invalid name used to define symbol"
+#define LERR_DEF_SYM_VAL_MISMATCH "Mismatch between number of symbols and values provided"
 
 lval* eval_sexpr(lval* v);
 lval* eval(lval* v);
@@ -58,6 +61,7 @@ lval* builtin_tail(env* e, lval* args);
 lval* builtin_array(env* e, lval* args);
 lval* builtin_eval(env* e, lval* args);
 lval* builtin_concat(env* e, lval* args);
+lval* builtin_def(env* e, lval* args);
 
 lval* lval_num(long n);
 lval* lval_err(char* code);
@@ -229,6 +233,7 @@ void add_all_builtins() {
   add_builtin("tail", builtin_tail);
   add_builtin("concat", builtin_concat);
   add_builtin("eval", builtin_eval);
+  add_builtin("def", builtin_def);
 
   add_builtin("+", builtin_add);
   add_builtin("-", builtin_sub);
@@ -384,6 +389,36 @@ lval* builtin_concat(env* e, lval* args) {
 
   lval_del(args);
   return accumulate;
+}
+
+lval* builtin_def(env* e, lval* args) {
+  if (args->exprs[0]->type != LVAL_QEXPR) {
+    lval_del(args);
+    return lval_err(LERR_INCORRECT_ARGS_TYPES("def"));
+  }
+
+  // first arg is a qexpr of the names of the symbols
+  // the remaining args are the values to be mapped onto the symbols
+  lval* names = args->exprs[0];
+
+  for (int i = 0; i < names->count; i++) {
+    if (names->exprs[i]->type != LVAL_SYM) {
+      lval_del(args);
+      return lval_err(LERR_CANNOT_DEFINE_NON_SYM);
+    }
+  }
+
+  if (names->count != (args->count - 1)) {
+    lval_del(args);
+    return lval_err(LERR_DEF_SYM_VAL_MISMATCH);
+  }
+
+  for (int i = 0; i < names->count; i++) {
+    env_put(e, names->exprs[i]->symbol, args->exprs[i + 1]);
+  }
+
+  lval_del(args);
+  return lval_sexpr();
 }
 
 lval* lval_num(long n) {
@@ -592,8 +627,7 @@ void env_put(env* e, char* key, lval* val) {
   for (int i = 0; i < e->size; i++) {
     if (strcmp(key, e->labels[i]) == 0) {
       lval_del(e->values[i]);
-      e->values[i] = val;
-      val = NULL;
+      e->values[i] = lval_copy(val);
       return;
     }
   }
@@ -603,10 +637,9 @@ void env_put(env* e, char* key, lval* val) {
   e->labels = realloc(e->labels, sizeof(char*) * e->size);
   e->values = realloc(e->values, sizeof(lval*) * e->size);
 
-  e->labels[e->size - 1] = key;
-  e->values[e->size - 1] = val;
-  key = NULL;
-  val = NULL;
+  e->labels[e->size - 1] = malloc(strlen(key) + 1);
+  strcpy(e->labels[e->size - 1], key);
+  e->values[e->size - 1] = lval_copy(val);
 }
 
 lval* env_get(env* e, lval* key) {
