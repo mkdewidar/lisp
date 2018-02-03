@@ -4,6 +4,15 @@
 static char input[2048];
 
 typedef struct lval lval;
+
+typedef struct env {
+  int size;
+  char** labels;
+  lval** values;
+} env;
+
+typedef lval*(*lbuiltin)(env*, lval*);
+
 typedef struct lval {
   int type;
 
@@ -14,6 +23,8 @@ typedef struct lval {
 
     char* symbol;
 
+    lbuiltin func;
+
     struct {
       int count;
       lval** exprs;
@@ -21,10 +32,12 @@ typedef struct lval {
   };
 } lval;
 
-enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR };
+enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_FUNC, LVAL_SEXPR, LVAL_QEXPR };
 #define LERR_DIV_ZERO "Division by zero!"
 #define LERR_BAD_OP "Invalid operation"
 #define LERR_BAD_NUM "Invalid number"
+#define LERR_UNDEFINED_SYMBOL "Undefined Symbol"
+#define LERR_NOT_VALID_SEXPR "Invalid sexpr, first element is not a function"
 #define LERR_TOO_MANY_ARGS(funcname) strcat(strcat("Function ", funcname), " has too many args")
 #define LERR_TOO_FEW_ARGS(funcname) strcat(strcat("Function ", funcname), " has too few args")
 #define LERR_INCORRECT_ARGS_TYPES(funcname) strcat(strcat("Function ", funcname), " passed incorrect types")
@@ -32,30 +45,53 @@ enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_SEXPR, LVAL_QEXPR };
 lval* eval_sexpr(lval* v);
 lval* eval(lval* v);
 lval* read(mpc_ast_t* tree);
-lval* builtin(lval* args, char* func);
-lval* builtin_op(lval* args, char* op);
-lval* builtin_head(lval* args);
-lval* builtin_tail(lval* args);
-lval* builtin_array(lval* args);
-lval* builtin_eval(lval* args);
-lval* builtin_concat(lval* args);
+
+void add_builtin(char* name, lbuiltin func);
+void add_all_builtins();
+lval* builtin_op(env* e, lval* args, char* op);
+lval* builtin_add(env* e, lval* args);
+lval* builtin_sub(env* e, lval* args);
+lval* builtin_mul(env* e, lval* args);
+lval* builtin_div(env* e, lval* args);
+lval* builtin_head(env* e, lval* args);
+lval* builtin_tail(env* e, lval* args);
+lval* builtin_array(env* e, lval* args);
+lval* builtin_eval(env* e, lval* args);
+lval* builtin_concat(env* e, lval* args);
 
 lval* lval_num(long n);
 lval* lval_err(char* code);
 lval* lval_sym(char* symbol);
 lval* lval_sexpr(void);
 lval* lval_qexpr(void);
+lval* lval_func(lbuiltin func);
 lval* lval_take(lval* v, int i);
 lval* lval_pop(lval* v, int i);
 void lval_add(lval* sexpr, lval* addition);
 void lval_del(lval* v);
+lval* lval_copy(lval* v);
 
 void lval_print(lval* v);
 void lval_println(lval* v);
 void lval_print_expr(lval* v, char open, char close);
 
+env* env_create();
+void env_delete(env* e);
+void env_put(env* e, char* key, lval* val);
+lval* env_get(env* e, lval* key);
+
+// The global environment for the program
+env* e = NULL;
 
 int main(int argc, char** argv) {
+
+  e = env_create();
+  if (e == NULL) {
+    fputs("ERROR: Failed to create environment, quitting...", stdout);
+    return -1;
+  }
+
+  add_all_builtins();
 
   puts("Welcome to this (so far) untitled Lisp");
   puts("Press Ctrl+c to exit\n");
@@ -69,14 +105,12 @@ int main(int argc, char** argv) {
 
   mpca_lang(MPCA_LANG_DEFAULT,
     "number: /-?[0-9]+/; \
-    symbol: \"array\" | \"head\" | \"tail\" | \"concat\" | \"eval\" \
-            | '+' | '-' | '*' | '/'; \
+    symbol: /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/; \
     qexpr: '[' <expr>* ']'; \
     sexpr: '(' <expr>* ')'; \
     expr: <number> | <symbol> | <sexpr> | <qexpr>; \
     code: /^/ <expr>* /$/;",
     number, symbol, sexpr, qexpr, expr, code);
-
 
   while (1) {
     fputs("lisp> ", stdout);
@@ -89,9 +123,9 @@ int main(int argc, char** argv) {
       // TODO: These print statements can be hidden behind debug flags
       // mpc_ast_print(r.output);
       lval* expr = read(r.output);
-      lval_print_expr(expr, '(', ')');
-      putchar('\n');
-      fflush(stdout);
+      // lval_print_expr(expr, '(', ')');
+      // putchar('\n');
+      // fflush(stdout);
       
       expr = eval(expr);
       lval_println(expr);
@@ -104,6 +138,7 @@ int main(int argc, char** argv) {
     }
   }
 
+  env_delete(e);
   mpc_cleanup(6, number, symbol, sexpr, qexpr, expr, code);
 
   return 0;
@@ -141,6 +176,11 @@ lval* read(mpc_ast_t* tree) {
 }
 
 lval* eval(lval* v) {
+  if (v->type == LVAL_SYM) {
+    lval* r = env_get(e, v);
+    lval_del(v);
+    return r;
+  }
   if (v->type == LVAL_SEXPR) {
     return eval_sexpr(v);
   }
@@ -167,37 +207,36 @@ lval* eval_sexpr(lval* v) {
   }
 
   lval* f = lval_pop(v, 0);
-  if (f->type != LVAL_SYM) {
+  if (f->type != LVAL_FUNC) {
     lval_del(f);
     lval_del(v);
-    return lval_err("S-Expression doesn't start with symbol.");
+    return lval_err(LERR_NOT_VALID_SEXPR);
   }
 
-  lval* result = builtin(v, f->symbol);
+  lval* result = f->func(e, v);
   lval_del(f);
   return result;
 }
 
-lval* builtin(lval* args, char* func) {
-  if (strcmp("array", func) == 0) {
-    return builtin_array(args);
-  }
-  if (strcmp("head", func) == 0) {
-    return builtin_head(args);
-  }
-  if (strcmp("tail", func) == 0) {
-    return builtin_tail(args);
-  }
-  if (strcmp("concat", func) == 0) {
-    return builtin_concat(args);
-  }
-  if (strcmp("eval", func) == 0) {
-    return builtin_eval(args);
-  }
-  return builtin_op(args, func);
+void add_builtin(char* name, lbuiltin func) {
+  lval* f = lval_func(func);
+  env_put(e, name, f);
 }
 
-lval* builtin_op(lval* args, char* op) {
+void add_all_builtins() {
+  add_builtin("array", builtin_array);
+  add_builtin("head", builtin_head);
+  add_builtin("tail", builtin_tail);
+  add_builtin("concat", builtin_concat);
+  add_builtin("eval", builtin_eval);
+
+  add_builtin("+", builtin_add);
+  add_builtin("-", builtin_sub);
+  add_builtin("*", builtin_mul);
+  add_builtin("/", builtin_div);
+}
+
+lval* builtin_op(env* e, lval* args, char* op) {
   for (int i = 0; i < args->count; i++) {
     if (args->exprs[i]->type != LVAL_NUM) {
       lval_del(args);
@@ -240,8 +279,24 @@ lval* builtin_op(lval* args, char* op) {
   return x;
 }
 
+lval* builtin_add(env* e, lval* args) {
+  return builtin_op(e, args, "+");
+}
+
+lval* builtin_sub(env* e, lval* args) {
+  return builtin_op(e, args, "-");
+}
+
+lval* builtin_mul(env* e, lval* args) {
+  return builtin_op(e, args, "*");
+}
+
+lval* builtin_div(env* e, lval* args) {
+  return builtin_op(e, args, "/");
+}
+
 /* Given a qexpr will return the head (aka first) expression */
-lval* builtin_head(lval* args) {
+lval* builtin_head(env*e, lval* args) {
   if (args->count == 0) {
     lval_del(args);
     return lval_err(LERR_TOO_FEW_ARGS("head"));
@@ -263,7 +318,7 @@ lval* builtin_head(lval* args) {
 }
 
 /* Given a qexpr will return the tail (aka last) expression */
-lval* builtin_tail(lval* args) {
+lval* builtin_tail(env* e, lval* args) {
   if (args->count == 0) {
     lval_del(args);
     return lval_err(LERR_TOO_FEW_ARGS("tail"));
@@ -285,13 +340,13 @@ lval* builtin_tail(lval* args) {
 }
 
 /* Converts a sexpr into a qexpr */
-lval* builtin_array(lval* args) {
+lval* builtin_array(env* e, lval* args) {
   args->type = LVAL_QEXPR;
   return args;
 }
 
 /* Will convert a qexpr into a sexpr and eval it */
-lval* builtin_eval(lval* args) {
+lval* builtin_eval(env* e, lval* args) {
   if (args->count == 0) {
     lval_del(args);
     return lval_err(LERR_TOO_FEW_ARGS("eval"));
@@ -310,7 +365,7 @@ lval* builtin_eval(lval* args) {
 }
 
 /* Given a sexpr with multiple qexprs as its children, will combine the qexprs to a single one */
-lval* builtin_concat(lval* args) {
+lval* builtin_concat(env* e, lval* args) {
   for (int i = 0; i < args->count; i++) {
     if (args->exprs[i]->type != LVAL_QEXPR) {
       lval_del(args);
@@ -370,6 +425,13 @@ lval* lval_qexpr(void) {
   return v;
 }
 
+lval* lval_func(lbuiltin func) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_FUNC;
+  v->func = func;
+  return v;
+}
+
 lval* lval_take(lval* v, int i) {
   lval* x = lval_pop(v, i);
   lval_del(v);
@@ -415,9 +477,48 @@ void lval_del(lval* v) {
     }
     free(v->exprs);
     break;
+
+  case LVAL_FUNC:
+    break;
   }
 
   free(v);
+}
+
+lval* lval_copy(lval* v) {
+  lval* copy = malloc(sizeof(lval));
+  copy->type = v->type;
+
+  switch(v->type) {
+  case LVAL_NUM:
+    copy->num = v->num;
+    break;
+
+  case LVAL_ERR:
+    copy->error = malloc(strlen(v->error) + 1);
+    strcpy(copy->error, v->error);
+    break;
+
+  case LVAL_SYM:
+    copy->symbol = malloc(strlen(v->symbol) + 1);
+    strcpy(copy->symbol, v->symbol);
+    break;
+
+  case LVAL_SEXPR:
+  case LVAL_QEXPR:
+    copy->count = v->count;
+    copy->exprs = malloc(sizeof(lval*) * v->count);
+    for (int i = 0; i < v->count; i++) {
+      copy->exprs[i] = lval_copy(v->exprs[i]);
+    }
+    break;
+
+  case LVAL_FUNC:
+    copy->func = v->func;
+    break;
+  }
+
+  return copy;
 }
 
 void lval_print(lval* v) {
@@ -441,6 +542,10 @@ void lval_print(lval* v) {
   case LVAL_QEXPR:
     lval_print_expr(v, '[', ']');
     break;
+
+  case LVAL_FUNC:
+    printf("<function>");
+    break;
   }
 }
 
@@ -461,4 +566,56 @@ void lval_print_expr(lval* v, char open, char close) {
   }
 
   putchar(close);
+}
+
+env* env_create() {
+  env* e = malloc(sizeof(env));
+  e->size = 0;
+  e->labels = NULL;
+  e->values = NULL;
+  return e;
+}
+
+void env_delete(env* e) {
+  for (int i = 0; i < e->size; i++) {
+    free(e->labels[i]);
+    lval_del(e->values[i]);
+  }
+  
+  free(e->labels);
+  free(e->values);
+
+  free(e);
+}
+
+void env_put(env* e, char* key, lval* val) {
+  for (int i = 0; i < e->size; i++) {
+    if (strcmp(key, e->labels[i]) == 0) {
+      lval_del(e->values[i]);
+      e->values[i] = val;
+      val = NULL;
+      return;
+    }
+  }
+
+  e->size++;
+
+  e->labels = realloc(e->labels, sizeof(char*) * e->size);
+  e->values = realloc(e->values, sizeof(lval*) * e->size);
+
+  e->labels[e->size - 1] = key;
+  e->values[e->size - 1] = val;
+  key = NULL;
+  val = NULL;
+}
+
+lval* env_get(env* e, lval* key) {
+
+  for (int i = 0; i < e->size; i++) {
+    if (strcmp(e->labels[i], key->symbol) == 0) {
+      return lval_copy(e->values[i]);
+    }
+  }
+
+  return lval_err(LERR_UNDEFINED_SYMBOL);
 }
