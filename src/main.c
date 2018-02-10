@@ -512,12 +512,23 @@ lval* builtin_if(env* e, lval* args) {
     return lval_take(args, 0);
   }
 
+  // the expressions to execute based on the condition have
+  // to be qexprs
+  if ((args->exprs[1]->type != LVAL_QEXPR) ||
+      ((args->count == 3) && (args->exprs[2]->type != LVAL_QEXPR))) {
+    lval_del(args);
+    return lval_err(LERR_INCORRECT_ARGS_TYPES("if"));    
+  }
+
   lval* answer;
 
+  args->exprs[1]->type = LVAL_SEXPR;
+  args->exprs[2]->type = LVAL_SEXPR;
+  
   if (is_truthy(e, args->exprs[0])) {
-    answer = lval_copy(args->exprs[1]);
+    answer = eval(e, lval_take(args, 1));
   } else if (args->count == 3) {
-    answer = lval_copy(args->exprs[2]);
+    answer = eval(e, lval_take(args, 2));
   } else {
     answer = lval_sexpr();
   }
