@@ -67,6 +67,9 @@ lval* builtin_eval(env* e, lval* args);
 lval* builtin_concat(env* e, lval* args);
 lval* builtin_def(env* e, lval* args);
 lval* builtin_lambda(env* e, lval* args);
+lval* builtin_not(env* e, lval* args);
+
+int is_truthy(env* e, lval* val);
 
 lval* lval_num(long n);
 lval* lval_err(char* code);

@@ -187,6 +187,8 @@ void add_all_builtins() {
   add_builtin("def", builtin_def);
   add_builtin("\\", builtin_lambda);
 
+  add_builtin("!", builtin_not);
+
   add_builtin("+", builtin_add);
   add_builtin("-", builtin_sub);
   add_builtin("*", builtin_mul);
@@ -401,6 +403,50 @@ lval* builtin_lambda(env* e, lval* args) {
   lval_del(args);
 
   return lval_lambda(e, params, body);
+}
+
+lval* builtin_not(env* e, lval* args) {
+  if (args->count < 1) {
+    lval_del(args);
+    return lval_err(LERR_TOO_FEW_ARGS("!"));
+  }
+
+  if (args->count > 1) {
+    lval_del(args);
+    return lval_err(LERR_TOO_MANY_ARGS("!"));
+  }
+
+  lval* ret;
+  if (is_truthy(e, args->exprs[0])) {
+    ret = lval_num(0);
+  } else {
+    ret = lval_num(1);
+  }
+
+  lval_del(args);
+  return ret;
+}
+
+int is_truthy(env* e, lval* val) {
+  int truthy = 0;
+
+  // These are the only three types that we have to account for
+  // as a nature of how the interpreter works, everything else would've
+  // been evaluated into these.
+  switch(val->type) {
+  case LVAL_NUM:
+    return val->num;
+
+  case LVAL_QEXPR:
+    return val->count > 0;
+
+  case LVAL_FUNC:
+    // Lambdas are always true since they are "something"
+    // and if they've made it this far they're syntactically correct
+    return 1;
+  }
+
+  return truthy;
 }
 
 lval* lval_num(long n) {
