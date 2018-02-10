@@ -73,6 +73,7 @@ lval* builtin_gt(env* e, lval* args);
 lval* builtin_gte(env* e, lval* args);
 lval* builtin_lt(env* e, lval* args);
 lval* builtin_lte(env* e, lval* args);
+lval* builtin_eq(env* e, lval* args);
 
 int is_truthy(env* e, lval* val);
 
@@ -88,6 +89,7 @@ lval* lval_pop(lval* v, int i);
 void lval_add(lval* sexpr, lval* addition);
 void lval_del(lval* v);
 lval* lval_copy(lval* v);
+int lval_eq(lval* a, lval* b);
 
 void lval_print(lval* v);
 void lval_println(lval* v);

@@ -193,6 +193,7 @@ void add_all_builtins() {
   add_builtin("gte", builtin_gte);
   add_builtin("lt", builtin_lt);
   add_builtin("lte", builtin_lte);
+  add_builtin("eq", builtin_eq);
 
   add_builtin("+", builtin_add);
   add_builtin("-", builtin_sub);
@@ -479,6 +480,22 @@ lval* builtin_lte(env* e, lval* args) {
   return builtin_cmp(e, args, "<=");
 }
 
+lval* builtin_eq(env* e, lval* args) {
+  if (args->count > 2) {
+    lval_del(args);
+    return lval_err(LERR_TOO_MANY_ARGS("=="));
+  }
+
+  if (args->count < 2) {
+    lval_del(args);
+    return lval_err(LERR_TOO_FEW_ARGS("=="));
+  }
+
+  int result = lval_eq(args->exprs[0], args->exprs[1]);
+  lval_del(args);
+  return lval_num(result);
+}
+
 int is_truthy(env* e, lval* val) {
   int truthy = 0;
 
@@ -658,6 +675,49 @@ lval* lval_copy(lval* v) {
   }
 
   return copy;
+}
+
+int lval_eq(lval* a, lval* b) {
+  if (a->type != b->type) {
+    return 0;
+  }
+
+  switch(a->type) {
+  case LVAL_NUM:
+    return (a->num == b->num);
+
+  case LVAL_SYM:
+    return (strcmp(a->symbol, b->symbol) == 0);
+
+  case LVAL_ERR:
+    return (strcmp(a->error, b->error) == 0);
+
+  case LVAL_SEXPR:
+  case LVAL_QEXPR:
+    if (a->count != b->count) {
+      return 0;
+    }
+    
+    for (int i = 0; i < a->count; i++) {
+      if (lval_eq(a->exprs[i], b->exprs[i]) == 0) {
+	return 0;
+      }
+    }
+
+    return 1;
+
+  case LVAL_FUNC:
+    if (a->builtin != b->builtin) {
+      return 0;
+    }
+    if (lval_eq(a->body, b->body) == 0) {
+      return 0;
+    }
+    if (lval_eq(a->params, b->params) == 0) {
+      return 0;
+    }
+    return 1;
+  }
 }
 
 void lval_print(lval* v) {
