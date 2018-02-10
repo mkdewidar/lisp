@@ -68,6 +68,11 @@ lval* builtin_concat(env* e, lval* args);
 lval* builtin_def(env* e, lval* args);
 lval* builtin_lambda(env* e, lval* args);
 lval* builtin_not(env* e, lval* args);
+lval* builtin_cmp(env* e, lval* args, char* op);
+lval* builtin_gt(env* e, lval* args);
+lval* builtin_gte(env* e, lval* args);
+lval* builtin_lt(env* e, lval* args);
+lval* builtin_lte(env* e, lval* args);
 
 int is_truthy(env* e, lval* val);
 

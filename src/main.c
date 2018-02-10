@@ -189,6 +189,11 @@ void add_all_builtins() {
 
   add_builtin("!", builtin_not);
 
+  add_builtin("gt", builtin_gt);
+  add_builtin("gte", builtin_gte);
+  add_builtin("lt", builtin_lt);
+  add_builtin("lte", builtin_lte);
+
   add_builtin("+", builtin_add);
   add_builtin("-", builtin_sub);
   add_builtin("*", builtin_mul);
@@ -425,6 +430,53 @@ lval* builtin_not(env* e, lval* args) {
 
   lval_del(args);
   return ret;
+}
+
+lval* builtin_cmp(env* e, lval* args, char* op) {
+  if (args->count < 1) {
+    lval_del(args);
+    return lval_err(LERR_TOO_FEW_ARGS(""));
+  }
+
+  if (args->count > 2) {
+    lval_del(args);
+    return lval_err(LERR_TOO_MANY_ARGS(""));
+  }
+
+  if ((args->exprs[0]->type != LVAL_NUM) ||
+      (args->exprs[1]->type != LVAL_NUM)) {
+    lval_del(args);
+    return lval_err(LERR_INCORRECT_ARGS_TYPES(""));
+  }
+
+  int result = 0;
+  if (strcmp(op, ">") == 0) {
+    result = (args->exprs[0]->num > args->exprs[1]->num);
+  } else if (strcmp(op, ">=") == 0) {
+    result = (args->exprs[0]->num >= args->exprs[1]->num);
+  } else if (strcmp(op, "<") == 0) {
+    result = (args->exprs[0]->num < args->exprs[1]->num);
+  } else if (strcmp(op, "<=") == 0) {
+    result = (args->exprs[0]->num <= args->exprs[1]->num);
+  }
+
+  return lval_num(result);
+}
+
+lval* builtin_gt(env* e, lval* args) {
+  return builtin_cmp(e, args, ">");
+}
+
+lval* builtin_gte(env* e, lval* args) {
+  return builtin_cmp(e, args, ">=");
+}
+
+lval* builtin_lt(env* e, lval* args) {
+  return builtin_cmp(e, args, "<");
+}
+
+lval* builtin_lte(env* e, lval* args) {
+  return builtin_cmp(e, args, "<=");
 }
 
 int is_truthy(env* e, lval* val) {
