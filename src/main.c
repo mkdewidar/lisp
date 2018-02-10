@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
 
   add_all_builtins();
 
-  puts("Welcome to this (so far) untitled Lisp");
+  puts("Welcome to this basic Lisp dialect");
   puts("Press Ctrl+c to exit\n");
 
   mpc_parser_t* number = mpc_new("number");
@@ -186,6 +186,7 @@ void add_all_builtins() {
   add_builtin("eval", builtin_eval);
   add_builtin("def", builtin_def);
   add_builtin("\\", builtin_lambda);
+  add_builtin("if", builtin_if);
 
   add_builtin("!", builtin_not);
 
@@ -494,6 +495,35 @@ lval* builtin_eq(env* e, lval* args) {
   int result = lval_eq(args->exprs[0], args->exprs[1]);
   lval_del(args);
   return lval_num(result);
+}
+
+lval* builtin_if(env* e, lval* args) {
+  if (args->count > 3) {
+    lval_del(args);
+    return lval_err(LERR_TOO_MANY_ARGS("if"));
+  }
+
+  if (args->count < 1) {
+    lval_del(args);
+    return lval_err(LERR_TOO_FEW_ARGS("if"));
+  }
+
+  if (args->exprs[0]->type == LVAL_ERR) {
+    return lval_take(args, 0);
+  }
+
+  lval* answer;
+
+  if (is_truthy(e, args->exprs[0])) {
+    answer = lval_copy(args->exprs[1]);
+  } else if (args->count == 3) {
+    answer = lval_copy(args->exprs[2]);
+  } else {
+    answer = lval_sexpr();
+  }
+
+  lval_del(args);
+  return answer;
 }
 
 int is_truthy(env* e, lval* val) {

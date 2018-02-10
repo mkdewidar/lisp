@@ -74,6 +74,7 @@ lval* builtin_gte(env* e, lval* args);
 lval* builtin_lt(env* e, lval* args);
 lval* builtin_lte(env* e, lval* args);
 lval* builtin_eq(env* e, lval* args);
+lval* builtin_if(env* e, lval* args);
 
 int is_truthy(env* e, lval* val);
 
