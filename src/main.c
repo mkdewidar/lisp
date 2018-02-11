@@ -222,6 +222,7 @@ void add_all_builtins() {
 
   add_builtin("load", builtin_load);
   add_builtin("print", builtin_print);
+  add_builtin("error", builtin_error);
 }
 
 lval* builtin_op(env* e, lval* args, char* op) {
@@ -486,6 +487,23 @@ lval* builtin_print(env* e, lval* args) {
 
   lval_del(args);
   return lval_sexpr();
+}
+
+lval* builtin_error(env* e, lval* args) {
+  if (args->count != 1) {
+    lval_del(args);
+    return lval_err("Expected only one argument for error");
+  }
+
+  if (args->exprs[0]->type != LVAL_STR) {
+    lval_del(args);
+    return lval_err("Expected only strings for error");
+  }
+
+  lval* err = lval_err(args->exprs[0]->str);
+
+  lval_del(args);
+  return err;
 }
 
 lval* builtin_not(env* e, lval* args) {
