@@ -21,6 +21,7 @@ int main(int argc, char** argv) {
   puts("Press Ctrl+c to exit\n");
 
   mpc_parser_t* number = mpc_new("number");
+  mpc_parser_t* string = mpc_new("string");
   mpc_parser_t* symbol = mpc_new("symbol");
   mpc_parser_t* qexpr = mpc_new("qexpr");
   mpc_parser_t* sexpr = mpc_new("sexpr");
@@ -29,12 +30,13 @@ int main(int argc, char** argv) {
 
   mpca_lang(MPCA_LANG_DEFAULT,
     "number: /-?[0-9]+/; \
+    string: /\"(\\\\.|[^\"])*\"/; \
     symbol: /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/; \
     qexpr: '[' <expr>* ']'; \
     sexpr: '(' <expr>* ')'; \
-    expr: <number> | <symbol> | <sexpr> | <qexpr>; \
+    expr: <number> | <string> | <symbol> | <sexpr> | <qexpr>; \
     code: /^/ <expr>* /$/;",
-    number, symbol, sexpr, qexpr, expr, code);
+    number, string, symbol, sexpr, qexpr, expr, code);
 
   while (1) {
     fputs("lisp> ", stdout);
@@ -63,7 +65,7 @@ int main(int argc, char** argv) {
   }
 
   env_delete(e);
-  mpc_cleanup(6, number, symbol, sexpr, qexpr, expr, code);
+  mpc_cleanup(7, number, string, symbol, sexpr, qexpr, expr, code);
 
   return 0;
 }
@@ -73,6 +75,18 @@ lval* read(mpc_ast_t* tree) {
     errno = 0;
     long num = strtol(tree->contents, NULL, 10);
     return (errno == ERANGE) ? lval_err(LERR_BAD_NUM) : lval_num(num);
+  }
+
+  if (strstr(tree->tag, "string")) {
+    // we want to ignore the surrounding quotes, so setting the closing quote
+    // to be the null terminator, and copying from the second character
+    char* unescaped = malloc(strlen(tree->contents) - 1);
+    tree->contents[strlen(tree->contents) - 1] = '\0';
+    strcpy(unescaped, tree->contents + 1);
+    unescaped = mpcf_unescape(unescaped);
+    lval* s = lval_str(unescaped);
+    free(unescaped);
+    return s;
   }
 
   if (strstr(tree->tag, "symbol")) {
@@ -566,6 +580,14 @@ lval* lval_num(long n) {
   return v;
 }
 
+lval* lval_str(char* str) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_STR;
+  v->str = malloc(strlen(str) + 1);
+  strcpy(v->str, str);
+  return v;
+}
+
 lval* lval_err(char* msg) {
   lval* v = malloc(sizeof(lval));
   v->type = LVAL_ERR;
@@ -647,6 +669,9 @@ void lval_del(lval* v) {
   case LVAL_NUM:
     break;
 
+  case LVAL_STR:
+    free(v->str);
+
   case LVAL_ERR:
     free(v->error);
     break;
@@ -682,6 +707,11 @@ lval* lval_copy(lval* v) {
   switch(v->type) {
   case LVAL_NUM:
     copy->num = v->num;
+    break;
+
+  case LVAL_STR:
+    copy->str = malloc(strlen(v->str) + 1);
+    strcpy(copy->str, v->str);
     break;
 
   case LVAL_ERR:
@@ -727,6 +757,9 @@ int lval_eq(lval* a, lval* b) {
   case LVAL_NUM:
     return (a->num == b->num);
 
+  case LVAL_STR:
+    return (strcmp(a->str, b->str) == 0);
+
   case LVAL_SYM:
     return (strcmp(a->symbol, b->symbol) == 0);
 
@@ -766,6 +799,15 @@ void lval_print(lval* v) {
   case LVAL_NUM:
     printf("%li", v->num);
     break;
+
+  case LVAL_STR: {
+      char* escaped = malloc(strlen(v->str) + 1);
+      strcpy(escaped, v->str);
+      escaped = mpcf_escape(escaped);
+      printf("\"%s\"", escaped);
+      free(escaped);
+      break;
+    }
 
   case LVAL_ERR:
     printf("Error: %s", v->error);

@@ -20,6 +20,8 @@ typedef struct lval {
 
     char* symbol;
 
+    char* str;
+
     struct {
       lbuiltin builtin;
       env* scope;
@@ -34,7 +36,7 @@ typedef struct lval {
   };
 } lval;
 
-enum { LVAL_ERR, LVAL_NUM, LVAL_SYM, LVAL_FUNC, LVAL_SEXPR, LVAL_QEXPR };
+enum { LVAL_ERR, LVAL_NUM, LVAL_STR, LVAL_SYM, LVAL_FUNC, LVAL_SEXPR, LVAL_QEXPR };
 
 #define LERR_DIV_ZERO "Division by zero!"
 #define LERR_BAD_OP "Invalid operation"
@@ -79,6 +81,7 @@ lval* builtin_if(env* e, lval* args);
 int is_truthy(env* e, lval* val);
 
 lval* lval_num(long n);
+lval* lval_str(char* str);
 lval* lval_err(char* code);
 lval* lval_sym(char* symbol);
 lval* lval_sexpr(void);
