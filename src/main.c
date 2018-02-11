@@ -221,6 +221,7 @@ void add_all_builtins() {
   add_builtin("/", builtin_div);
 
   add_builtin("load", builtin_load);
+  add_builtin("print", builtin_print);
 }
 
 lval* builtin_op(env* e, lval* args, char* op) {
@@ -474,6 +475,17 @@ lval* builtin_load(env* e, lval* args) {
   lval_del(args);
 
   return r;
+}
+
+lval* builtin_print(env* e, lval* args) {
+  for (int i = 0; i < args->count; i++) {
+    lval_print(args->exprs[i]);
+    putchar(' ');
+  }
+  putchar('\n');
+
+  lval_del(args);
+  return lval_sexpr();
 }
 
 lval* builtin_not(env* e, lval* args) {
