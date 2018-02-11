@@ -27,16 +27,18 @@ int main(int argc, char** argv) {
   mpc_parser_t* sexpr = mpc_new("sexpr");
   mpc_parser_t* expr = mpc_new("expr");
   mpc_parser_t* code = mpc_new("code");
+  mpc_parser_t* comment = mpc_new("comment");
 
   mpca_lang(MPCA_LANG_DEFAULT,
-    "number: /-?[0-9]+/; \
-    string: /\"(\\\\.|[^\"])*\"/; \
-    symbol: /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/; \
-    qexpr: '[' <expr>* ']'; \
-    sexpr: '(' <expr>* ')'; \
-    expr: <number> | <string> | <symbol> | <sexpr> | <qexpr>; \
-    code: /^/ <expr>* /$/;",
-    number, string, symbol, sexpr, qexpr, expr, code);
+	    "number: /-?[0-9]+/; \
+            string: /\"(\\\\.|[^\"])*\"/; \
+            symbol: /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/; \
+            qexpr: '[' <expr>* ']'; \
+            sexpr: '(' <expr>* ')'; \
+            expr: <number> | <string> | <symbol> | <sexpr> | <qexpr> | <comment>; \
+            code: /^/ <expr>* /$/; \
+            comment: /;[^\\r\\n]*/;",
+	    number, string, symbol, sexpr, qexpr, expr, code, comment);
 
   while (1) {
     fputs("lisp> ", stdout);
@@ -65,7 +67,7 @@ int main(int argc, char** argv) {
   }
 
   env_delete(e);
-  mpc_cleanup(7, number, string, symbol, sexpr, qexpr, expr, code);
+  mpc_cleanup(8, number, string, symbol, sexpr, qexpr, expr, code, comment);
 
   return 0;
 }
@@ -103,8 +105,9 @@ lval* read(mpc_ast_t* tree) {
   }
 
   for (int i = 0; i < tree->children_num; i++) {
-    if ((strcmp(tree->children[i]->tag, "char") == 0)
-        || (strcmp(tree->children[i]->tag, "regex") == 0)) {
+    if ((strcmp(tree->children[i]->tag, "char") == 0) ||
+	(strcmp(tree->children[i]->tag, "regex") == 0) ||
+	strstr(tree->children[i]->tag, "comment")) {
       continue;
     }
     lval_add(expressions, read(tree->children[i]));
