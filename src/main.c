@@ -7,6 +7,8 @@ static char input[2048];
 // The global environment for the program
 env* e = NULL;
 
+mpc_parser_t* Code;
+
 int main(int argc, char** argv) {
 
   e = env_create(NULL);
@@ -26,8 +28,8 @@ int main(int argc, char** argv) {
   mpc_parser_t* qexpr = mpc_new("qexpr");
   mpc_parser_t* sexpr = mpc_new("sexpr");
   mpc_parser_t* expr = mpc_new("expr");
-  mpc_parser_t* code = mpc_new("code");
   mpc_parser_t* comment = mpc_new("comment");
+  Code = mpc_new("code");
 
   mpca_lang(MPCA_LANG_DEFAULT,
 	    "number: /-?[0-9]+/; \
@@ -38,7 +40,7 @@ int main(int argc, char** argv) {
             expr: <number> | <string> | <symbol> | <sexpr> | <qexpr> | <comment>; \
             code: /^/ <expr>* /$/; \
             comment: /;[^\\r\\n]*/;",
-	    number, string, symbol, sexpr, qexpr, expr, code, comment);
+	    number, string, symbol, sexpr, qexpr, expr, Code, comment);
 
   while (1) {
     fputs("lisp> ", stdout);
@@ -47,7 +49,7 @@ int main(int argc, char** argv) {
     fgets(input, 2048, stdin);
 
     mpc_result_t r;
-    if (mpc_parse("<stdin>", input, code, &r)) {
+    if (mpc_parse("<stdin>", input, Code, &r)) {
       // TODO: These print statements can be hidden behind debug flags
       // mpc_ast_print(r.output);
       lval* expr = read(r.output);
@@ -67,7 +69,7 @@ int main(int argc, char** argv) {
   }
 
   env_delete(e);
-  mpc_cleanup(8, number, string, symbol, sexpr, qexpr, expr, code, comment);
+  mpc_cleanup(8, number, string, symbol, sexpr, qexpr, expr, Code, comment);
 
   return 0;
 }
@@ -217,6 +219,8 @@ void add_all_builtins() {
   add_builtin("-", builtin_sub);
   add_builtin("*", builtin_mul);
   add_builtin("/", builtin_div);
+
+  add_builtin("load", builtin_load);
 }
 
 lval* builtin_op(env* e, lval* args, char* op) {
@@ -427,6 +431,49 @@ lval* builtin_lambda(env* e, lval* args) {
   lval_del(args);
 
   return lval_lambda(e, params, body);
+}
+
+lval* builtin_load(env* e, lval* args) {
+  if (args->count != 1) {
+    lval_del(args);
+    return lval_err("Expected name for a single module for load");
+  }
+
+  if (args->exprs[0]->type != LVAL_STR) {
+    lval_del(args);
+    return lval_err("Expected string for module name for load");
+  }
+
+  lval* r;
+
+  mpc_result_t module;
+  if (mpc_parse_contents(args->exprs[0]->str, Code, &module)) {
+    lval* expr = read(module.output);
+    mpc_ast_delete(module.output);
+
+    while (expr->count) {
+      lval* x = eval(e, lval_pop(expr, 0));
+      // this way, we can print a single error per statement in the module
+      if (x->type == LVAL_ERR) {
+	lval_println(x);
+      }
+      lval_del(x);
+    }
+
+    lval_del(expr);
+
+    r = lval_sexpr();
+  } else {
+    char* e = mpc_err_string(module.error);
+    mpc_err_delete(module.error);
+
+    r = lval_err(e);
+    free(e);
+  }
+
+  lval_del(args);
+
+  return r;
 }
 
 lval* builtin_not(env* e, lval* args) {
