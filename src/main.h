@@ -1,3 +1,5 @@
+#include "mpc.h"
+
 typedef struct lval lval;
 typedef struct env env;
 
