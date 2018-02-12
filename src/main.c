@@ -347,6 +347,11 @@ lval* builtin_eval(env* e, lval* args) {
     return lval_err(LERR_TOO_MANY_ARGS("eval"));
   }
 
+  if (args->exprs[0]->type != LVAL_QEXPR) {
+    lval_del(args);
+    return lval_err("Expected single qexpr as argument for eval");
+  }
+
   lval* x = lval_pop(args, 0);
   lval_del(args);
   x->type = LVAL_SEXPR;
