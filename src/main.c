@@ -209,11 +209,11 @@ void add_all_builtins() {
 
   add_builtin("!", builtin_not);
 
-  add_builtin("gt", builtin_gt);
-  add_builtin("gte", builtin_gte);
-  add_builtin("lt", builtin_lt);
-  add_builtin("lte", builtin_lte);
-  add_builtin("eq", builtin_eq);
+  add_builtin(">", builtin_gt);
+  add_builtin(">=", builtin_gte);
+  add_builtin("<", builtin_lt);
+  add_builtin("<=", builtin_lte);
+  add_builtin("==", builtin_eq);
 
   add_builtin("+", builtin_add);
   add_builtin("-", builtin_sub);
