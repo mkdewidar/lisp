@@ -671,7 +671,7 @@ lval* lval_str(char* str) {
 lval* lval_err(char* msg) {
   lval* v = malloc(sizeof(lval));
   v->type = LVAL_ERR;
-  v->error = malloc(sizeof(strlen(msg) + 1));
+  v->error = malloc(strlen(msg) + 1);
   strcpy(v->error, msg);
   return v;
 }
@@ -679,7 +679,7 @@ lval* lval_err(char* msg) {
 lval* lval_sym(char* symbol) {
   lval* v = malloc(sizeof(lval));
   v->type = LVAL_SYM;
-  v->symbol = malloc(sizeof(strlen(symbol) + 1));
+  v->symbol = malloc(strlen(symbol) + 1);
   strcpy(v->symbol, symbol);
   return v;
 }
