@@ -52,14 +52,14 @@ enum { LVAL_ERR, LVAL_NUM, LVAL_STR, LVAL_SYM, LVAL_FUNC, LVAL_SEXPR, LVAL_QEXPR
 #define LERR_DEF_SYM_VAL_MISMATCH "Mismatch between number of symbols and values provided"
 #define LERR_LAMBDA_ARGS_COUNT "Lambda definition must have parameter and body definition"
 
-lval* eval_sexpr(env* e, lval* v);
-lval* eval(env* e, lval* v);
+lval* eval_sexpr(env* e, lval* sexpr);
+lval* eval(env* e, lval* expr);
 lval* read(mpc_ast_t* tree);
-lval* call(env* e, lval* f, lval* args);
+lval* call(env* e, lval* function, lval* args);
 
-void add_builtin(char* name, lbuiltin func);
+void add_builtin(char* identifier, lbuiltin func);
 void add_all_builtins();
-lval* builtin_op(env* e, lval* args, char* op);
+lval* builtin_op(env* e, lval* args, char* operator);
 lval* builtin_add(env* e, lval* args);
 lval* builtin_sub(env* e, lval* args);
 lval* builtin_mul(env* e, lval* args);
@@ -85,15 +85,15 @@ lval* builtin_if(env* e, lval* args);
 
 int is_truthy(env* e, lval* val);
 
-lval* lval_num(long n);
+lval* lval_num(long num);
 lval* lval_str(char* str);
 lval* lval_err(char* code);
-lval* lval_sym(char* symbol);
+lval* lval_sym(char* identifier);
 lval* lval_sexpr(void);
 lval* lval_qexpr(void);
 lval* lval_func(lbuiltin func);
-lval* lval_lambda(env* parent, lval* params, lval* body);
-lval* lval_take(lval* v, int i);
+lval* lval_lambda(env* parentEnv, lval* params, lval* body);
+lval* lval_take(lval* parentExpr, int index);
 lval* lval_pop(lval* v, int i);
 void lval_add(lval* sexpr, lval* addition);
 void lval_del(lval* v);
