@@ -197,6 +197,7 @@ lval* call(env* e, lval* function, lval* args) {
 void add_builtin(char* identifier, lbuiltin func) {
   lval* f = lval_func(func);
   env_put(rootEnv, identifier, f);
+  lval_del(f);
 }
 
 void add_all_builtins() {
