@@ -293,7 +293,7 @@ lval* builtin_head(env*e, lval* args) {
 
   ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"head",
+			"head", 1,
 			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   lval* firstExpr = lval_take(args->exprs[0], 0);
@@ -309,7 +309,7 @@ lval* builtin_tail(env* e, lval* args) {
 
   ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"tail",
+			"tail", 1,
 			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   lval* lastExpr = lval_take(args->exprs[0], args->exprs[0]->count - 1);
@@ -331,7 +331,7 @@ lval* builtin_eval(env* e, lval* args) {
 
   ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"tail",
+			"tail", 1,
 			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   lval* qexpr = lval_pop(args, 0);
@@ -345,7 +345,7 @@ lval* builtin_concat(env* e, lval* args) {
   for (int i = 0; i < args->count; i++) {
     ASSERT_TRUE_OR_RETURN(args->exprs[i]->type == LVAL_QEXPR, args,
 			  T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			  "tail",
+			  "tail", i + 1,
 			  lval_typename(LVAL_QEXPR), lval_typename(args->exprs[i]->type));
   }
 
@@ -365,7 +365,7 @@ lval* builtin_concat(env* e, lval* args) {
 lval* builtin_def(env* e, lval* args) {
   ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"def",
+			"def", 1,
 			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   // first arg is a qexpr of the names of the identifiers
@@ -375,7 +375,7 @@ lval* builtin_def(env* e, lval* args) {
   for (int i = 0; i < identifiers->count; i++) {
     ASSERT_TRUE_OR_RETURN(identifiers->exprs[i]->type == LVAL_SYM, args,
 			  T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			  "def",
+			  "def", i + 1,
 			  lval_typename(LVAL_SYM), lval_typename(args->exprs[i]->type));
   }
 
@@ -398,18 +398,18 @@ lval* builtin_lambda(env* e, lval* args) {
 
   ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"lambda",
+			"lambda", 1,
 			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   ASSERT_TRUE_OR_RETURN(args->exprs[1]->type == LVAL_QEXPR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"lambda",
+			"lambda", 2,
 			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[1]->type));
 
   for (int i = 0; i < args->exprs[0]->count; i++) {
     ASSERT_TRUE_OR_RETURN(args->exprs[0]->exprs[i]->type == LVAL_SYM, args,
 			  T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			  "lambda",
+			  "lambda", i + 1,
 			  lval_typename(LVAL_SYM),
 			  lval_typename(args->exprs[0]->exprs[i]->type));
   }
@@ -428,7 +428,7 @@ lval* builtin_load(env* e, lval* args) {
 
   ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_STR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"load",
+			"load", 1,
 			lval_typename(LVAL_STR), lval_typename(args->exprs[0]->type));
 
   lval* loadResult;
@@ -481,7 +481,7 @@ lval* builtin_error(env* e, lval* args) {
 
   ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_STR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"error",
+			"error", 1,
 			lval_typename(LVAL_STR), lval_typename(args->exprs[0]->type));
 
   lval* error = lval_err(args->exprs[0]->str);
@@ -514,11 +514,13 @@ lval* builtin_cmp(env* e, lval* args, char* op) {
   ASSERT_TRUE_OR_RETURN((args->exprs[0]->type == LVAL_NUM),
 			args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			op, lval_typename(LVAL_NUM), lval_typename(args->exprs[0]->type));
+			op, 1,
+			lval_typename(LVAL_NUM), lval_typename(args->exprs[0]->type));
   ASSERT_TRUE_OR_RETURN((args->exprs[1]->type == LVAL_NUM),
 			args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			op, lval_typename(LVAL_NUM), lval_typename(args->exprs[1]->type));
+			op, 2,
+			lval_typename(LVAL_NUM), lval_typename(args->exprs[1]->type));
 
   int result = 0;
   if (strcmp(op, ">") == 0) {
@@ -577,12 +579,12 @@ lval* builtin_if(env* e, lval* args) {
   // to be qexprs
   ASSERT_TRUE_OR_RETURN(args->exprs[1]->type == LVAL_QEXPR, args,
 			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			"if",
+			"if", 2,
 			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[1]->type));
   if (args->count == 3) {
     ASSERT_TRUE_OR_RETURN(args->exprs[2]->type == LVAL_QEXPR, args,
 			  T_ERROR_FUNC_INCORRECT_ARG_TYPE,
-			  "if",
+			  "if", 3,
 			  lval_typename(LVAL_QEXPR), lval_typename(args->exprs[2]->type));
   }
 

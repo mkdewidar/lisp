@@ -41,7 +41,7 @@ typedef struct lval {
 enum { LVAL_ERR, LVAL_NUM, LVAL_STR, LVAL_SYM, LVAL_FUNC, LVAL_SEXPR, LVAL_QEXPR };
 
 #define T_ERROR_FUNC_UNEXPECTED_ARGS_NUM "Function %s expected %d args but got %d"
-#define T_ERROR_FUNC_INCORRECT_ARG_TYPE "Function %s expected argument type %s instead of %s"
+#define T_ERROR_FUNC_INCORRECT_ARG_TYPE "Function %s argument num %d expected %s but got %s"
 #define T_ERROR_UNDEFINED_SYMBOL "Undefined Symbol %s"
 
 #define ERROR_DIV_BY_ZERO "Division by zero"
