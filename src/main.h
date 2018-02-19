@@ -40,17 +40,13 @@ typedef struct lval {
 
 enum { LVAL_ERR, LVAL_NUM, LVAL_STR, LVAL_SYM, LVAL_FUNC, LVAL_SEXPR, LVAL_QEXPR };
 
-#define LERR_DIV_ZERO "Division by zero!"
-#define LERR_BAD_OP "Invalid operation"
-#define LERR_BAD_NUM "Invalid number"
-#define LERR_UNDEFINED_SYMBOL "Undefined Symbol"
-#define LERR_NOT_VALID_SEXPR "Invalid sexpr, first element is not a function"
-#define LERR_TOO_MANY_ARGS(funcname) "Function " funcname " has too many args"
-#define LERR_TOO_FEW_ARGS(funcname) "Function " funcname " has too few args"
-#define LERR_INCORRECT_ARGS_TYPES(funcname) "Function " funcname " passed incorrect types"
-#define LERR_CANNOT_DEFINE_NON_SYM "Invalid name used to define symbol"
-#define LERR_DEF_SYM_VAL_MISMATCH "Mismatch between number of symbols and values provided"
-#define LERR_LAMBDA_ARGS_COUNT "Lambda definition must have parameter and body definition"
+#define T_ERROR_FUNC_UNEXPECTED_ARGS_NUM "Function %s expected %d args but got %d"
+#define T_ERROR_FUNC_INCORRECT_ARG_TYPE "Function %s expected argument type %s instead of %s"
+#define T_ERROR_UNDEFINED_SYMBOL "Undefined Symbol %s"
+
+#define ERROR_DIV_BY_ZERO "Division by zero"
+#define ERROR_READ_BAD_NUM "Invalid number"
+#define ERROR_EVAL_INVALID_SEXPR "Invalid sexpr, first element is not a function"
 
 lval* eval_sexpr(env* e, lval* sexpr);
 lval* eval(env* e, lval* expr);
@@ -87,7 +83,7 @@ int is_truthy(env* e, lval* val);
 
 lval* lval_num(long num);
 lval* lval_str(char* str);
-lval* lval_err(char* code);
+lval* lval_err(char* msgFormat, ...);
 lval* lval_sym(char* identifier);
 lval* lval_sexpr(void);
 lval* lval_qexpr(void);
@@ -103,9 +99,17 @@ int lval_eq(lval* a, lval* b);
 void lval_print(lval* v);
 void lval_println(lval* v);
 void lval_print_expr(lval* v, char open, char close);
+char* lval_typename(int typeEnum);
 
 env* env_create(env* parent);
 env* env_copy(env* e);
 void env_delete(env* e);
 void env_put(env* e, char* key, lval* val);
 lval* env_get(env* e, lval* key);
+
+#define ASSERT_TRUE_OR_RETURN(condition, args, msg_format, ...)		\
+  if (!(condition)) {							\
+    lval* err = lval_err(msg_format, ##__VA_ARGS__);			\
+    lval_del(args);							\
+    return err;								\
+  }

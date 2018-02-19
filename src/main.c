@@ -79,7 +79,7 @@ lval* read(mpc_ast_t* tree) {
   if (strstr(tree->tag, "number")) {
     errno = 0;
     long num = strtol(tree->contents, NULL, 10);
-    return (errno == ERANGE) ? lval_err(LERR_BAD_NUM) : lval_num(num);
+    return (errno == ERANGE) ? lval_err(ERROR_READ_BAD_NUM) : lval_num(num);
   }
 
   if (strstr(tree->tag, "string")) {
@@ -154,7 +154,7 @@ lval* eval_sexpr(env* e, lval* sexpr) {
   if (firstExpr->type != LVAL_FUNC) {
     lval_del(firstExpr);
     lval_del(sexpr);
-    return lval_err(LERR_NOT_VALID_SEXPR);
+    return lval_err(ERROR_EVAL_INVALID_SEXPR);
   }
 
   lval* funcReturn = call(e, firstExpr, sexpr);
@@ -167,12 +167,11 @@ lval* call(env* e, lval* function, lval* args) {
     return function->builtin(e, args);
   }
 
-  while (args->count) {
-    if (function->params->count == 0) {
-      lval_del(args);
-      return lval_err(LERR_TOO_MANY_ARGS("function call"));
-    }
+  ASSERT_TRUE_OR_RETURN(function->params->count == args->count, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"call", function->params->count, args->count);
 
+  while (args->count) {
     lval* param = lval_pop(function->params, 0);
     lval* value = lval_pop(args, 0);
 
@@ -230,10 +229,9 @@ void add_all_builtins() {
 
 lval* builtin_op(env* e, lval* args, char* operator) {
   for (int i = 0; i < args->count; i++) {
-    if (args->exprs[i]->type != LVAL_NUM) {
-      lval_del(args);
-      return lval_err("Cannot operate on non-number");
-    }
+    ASSERT_TRUE_OR_RETURN(args->exprs[i]->type == LVAL_NUM, args,
+			  "Expected numbers as arguments for calculation, got %s",
+			  lval_typename(args->exprs[i]->type));
   }
 
   lval* x = lval_pop(args, 0);
@@ -258,7 +256,7 @@ lval* builtin_op(env* e, lval* args, char* operator) {
       if (y->num == 0) {
 	lval_del(x);
 	lval_del(y);
-	x = lval_err(LERR_DIV_ZERO);
+	x = lval_err(ERROR_DIV_BY_ZERO);
 	break;
       }
       x->num /= y->num;
@@ -289,20 +287,14 @@ lval* builtin_div(env* e, lval* args) {
 
 /* Given a qexpr will return the head (aka first) expression */
 lval* builtin_head(env*e, lval* args) {
-  if (args->count == 0) {
-    lval_del(args);
-    return lval_err(LERR_TOO_FEW_ARGS("head"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 1, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"head", 1, args->count);
 
-  if (args->count != 1) {
-    lval_del(args);
-    return lval_err(LERR_TOO_MANY_ARGS("head"));
-  }
-
-  if (args->exprs[0]->type != LVAL_QEXPR) {
-    lval_del(args);
-    return lval_err(LERR_INCORRECT_ARGS_TYPES("head"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"head",
+			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   lval* firstExpr = lval_take(args->exprs[0], 0);
   lval_del(args);
@@ -311,20 +303,14 @@ lval* builtin_head(env*e, lval* args) {
 
 /* Given a qexpr will return the tail (aka last) expression */
 lval* builtin_tail(env* e, lval* args) {
-  if (args->count == 0) {
-    lval_del(args);
-    return lval_err(LERR_TOO_FEW_ARGS("tail"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 1, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"tail", 1, args->count);
 
-  if (args->count != 1) {
-    lval_del(args);
-    return lval_err(LERR_TOO_MANY_ARGS("tail"));
-  }
-
-  if (args->exprs[0]->type != LVAL_QEXPR) {
-    lval_del(args);
-    return lval_err(LERR_INCORRECT_ARGS_TYPES("tail"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"tail",
+			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   lval* lastExpr = lval_take(args->exprs[0], args->exprs[0]->count - 1);
   lval_del(args);
@@ -339,21 +325,14 @@ lval* builtin_array(env* e, lval* args) {
 
 /* Will convert a qexpr into a sexpr and eval it */
 lval* builtin_eval(env* e, lval* args) {
-  if (args->count == 0) {
-    lval_del(args);
-    return lval_err(LERR_TOO_FEW_ARGS("eval"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 1, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"eval", 1, args->count);
 
-  // TODO: This should be removed once multiple expressions on the same line are allowed
-  if (args->count != 1) {
-    lval_del(args);
-    return lval_err(LERR_TOO_MANY_ARGS("eval"));
-  }
-
-  if (args->exprs[0]->type != LVAL_QEXPR) {
-    lval_del(args);
-    return lval_err("Expected single qexpr as argument for eval");
-  }
+  ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"tail",
+			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   lval* qexpr = lval_pop(args, 0);
   lval_del(args);
@@ -364,10 +343,10 @@ lval* builtin_eval(env* e, lval* args) {
 /* Given a sexpr with multiple qexprs as its children, will combine the qexprs to a single one */
 lval* builtin_concat(env* e, lval* args) {
   for (int i = 0; i < args->count; i++) {
-    if (args->exprs[i]->type != LVAL_QEXPR) {
-      lval_del(args);
-      return lval_err(LERR_INCORRECT_ARGS_TYPES("tail"));
-    }    
+    ASSERT_TRUE_OR_RETURN(args->exprs[i]->type == LVAL_QEXPR, args,
+			  T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			  "tail",
+			  lval_typename(LVAL_QEXPR), lval_typename(args->exprs[i]->type));
   }
 
   lval* finalQexpr = lval_pop(args, 0);
@@ -384,26 +363,25 @@ lval* builtin_concat(env* e, lval* args) {
 }
 
 lval* builtin_def(env* e, lval* args) {
-  if (args->exprs[0]->type != LVAL_QEXPR) {
-    lval_del(args);
-    return lval_err(LERR_INCORRECT_ARGS_TYPES("def"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"def",
+			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
   // first arg is a qexpr of the names of the identifiers
   // the remaining args are the values to be mapped onto them
   lval* identifiers = args->exprs[0];
 
   for (int i = 0; i < identifiers->count; i++) {
-    if (identifiers->exprs[i]->type != LVAL_SYM) {
-      lval_del(args);
-      return lval_err(LERR_CANNOT_DEFINE_NON_SYM);
-    }
+    ASSERT_TRUE_OR_RETURN(identifiers->exprs[i]->type == LVAL_SYM, args,
+			  T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			  "def",
+			  lval_typename(LVAL_SYM), lval_typename(args->exprs[i]->type));
   }
 
-  if (identifiers->count != (args->count - 1)) {
-    lval_del(args);
-    return lval_err(LERR_DEF_SYM_VAL_MISMATCH);
-  }
+  ASSERT_TRUE_OR_RETURN(identifiers->count == (args->count - 1), args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"def", identifiers->count, (args->count - 1));
 
   for (int i = 0; i < identifiers->count; i++) {
     env_put(e, identifiers->exprs[i]->symbol, args->exprs[i + 1]);
@@ -414,26 +392,26 @@ lval* builtin_def(env* e, lval* args) {
 }
 
 lval* builtin_lambda(env* e, lval* args) {
-  if (args->count != 2) {
-    lval_del(args);
-    return lval_err(LERR_LAMBDA_ARGS_COUNT);
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 2, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"lambda", 2, args->count);
 
-  if (args->exprs[0]->type != LVAL_QEXPR) {
-    lval_del(args);
-    return lval_err(LERR_INCORRECT_ARGS_TYPES("lambda"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_QEXPR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"lambda",
+			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[0]->type));
 
-  if (args->exprs[1]->type != LVAL_QEXPR) {
-    lval_del(args);
-    return lval_err(LERR_INCORRECT_ARGS_TYPES("lambda"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->exprs[1]->type == LVAL_QEXPR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"lambda",
+			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[1]->type));
 
   for (int i = 0; i < args->exprs[0]->count; i++) {
-    if (args->exprs[0]->exprs[i]->type != LVAL_SYM) {
-      lval_del(args);
-      return lval_err(LERR_CANNOT_DEFINE_NON_SYM);
-    }
+    ASSERT_TRUE_OR_RETURN(args->exprs[0]->exprs[i]->type == LVAL_SYM, args,
+			  T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			  "lambda",
+			  lval_typename(LVAL_SYM),
+			  lval_typename(args->exprs[0]->exprs[i]->type));
   }
 
   lval* params = lval_pop(args, 0);
@@ -444,15 +422,14 @@ lval* builtin_lambda(env* e, lval* args) {
 }
 
 lval* builtin_load(env* e, lval* args) {
-  if (args->count != 1) {
-    lval_del(args);
-    return lval_err("Expected name for a single module for load");
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 1, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"load", 1, args->count);
 
-  if (args->exprs[0]->type != LVAL_STR) {
-    lval_del(args);
-    return lval_err("Expected string for module name for load");
-  }
+  ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_STR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"load",
+			lval_typename(LVAL_STR), lval_typename(args->exprs[0]->type));
 
   lval* loadResult;
 
@@ -498,15 +475,14 @@ lval* builtin_print(env* e, lval* args) {
 }
 
 lval* builtin_error(env* e, lval* args) {
-  if (args->count != 1) {
-    lval_del(args);
-    return lval_err("Expected only one argument for error");
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 1, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"error", 1, args->count);
 
-  if (args->exprs[0]->type != LVAL_STR) {
-    lval_del(args);
-    return lval_err("Expected only strings for error");
-  }
+  ASSERT_TRUE_OR_RETURN(args->exprs[0]->type == LVAL_STR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"error",
+			lval_typename(LVAL_STR), lval_typename(args->exprs[0]->type));
 
   lval* error = lval_err(args->exprs[0]->str);
 
@@ -515,15 +491,9 @@ lval* builtin_error(env* e, lval* args) {
 }
 
 lval* builtin_not(env* e, lval* args) {
-  if (args->count < 1) {
-    lval_del(args);
-    return lval_err(LERR_TOO_FEW_ARGS("!"));
-  }
-
-  if (args->count > 1) {
-    lval_del(args);
-    return lval_err(LERR_TOO_MANY_ARGS("!"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 1, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"!", 1, args->count);
 
   lval* inversedValue;
   if (is_truthy(e, args->exprs[0])) {
@@ -537,21 +507,18 @@ lval* builtin_not(env* e, lval* args) {
 }
 
 lval* builtin_cmp(env* e, lval* args, char* op) {
-  if (args->count < 1) {
-    lval_del(args);
-    return lval_err(LERR_TOO_FEW_ARGS(""));
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 2, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			op, 2, args->count);
 
-  if (args->count > 2) {
-    lval_del(args);
-    return lval_err(LERR_TOO_MANY_ARGS(""));
-  }
-
-  if ((args->exprs[0]->type != LVAL_NUM) ||
-      (args->exprs[1]->type != LVAL_NUM)) {
-    lval_del(args);
-    return lval_err(LERR_INCORRECT_ARGS_TYPES(""));
-  }
+  ASSERT_TRUE_OR_RETURN((args->exprs[0]->type == LVAL_NUM),
+			args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			op, lval_typename(LVAL_NUM), lval_typename(args->exprs[0]->type));
+  ASSERT_TRUE_OR_RETURN((args->exprs[1]->type == LVAL_NUM),
+			args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			op, lval_typename(LVAL_NUM), lval_typename(args->exprs[1]->type));
 
   int result = 0;
   if (strcmp(op, ">") == 0) {
@@ -584,15 +551,9 @@ lval* builtin_lte(env* e, lval* args) {
 }
 
 lval* builtin_eq(env* e, lval* args) {
-  if (args->count > 2) {
-    lval_del(args);
-    return lval_err(LERR_TOO_MANY_ARGS("=="));
-  }
-
-  if (args->count < 2) {
-    lval_del(args);
-    return lval_err(LERR_TOO_FEW_ARGS("=="));
-  }
+  ASSERT_TRUE_OR_RETURN(args->count == 2, args,
+			T_ERROR_FUNC_UNEXPECTED_ARGS_NUM,
+			"==", 2, args->count);
 
   int result = lval_eq(args->exprs[0], args->exprs[1]);
   lval_del(args);
@@ -600,15 +561,13 @@ lval* builtin_eq(env* e, lval* args) {
 }
 
 lval* builtin_if(env* e, lval* args) {
-  if (args->count > 3) {
-    lval_del(args);
-    return lval_err(LERR_TOO_MANY_ARGS("if"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->count >= 2, args,
+			"Function %s expected at least %d arguments recieved %d",
+			"if", 2, args->count);
 
-  if (args->count < 1) {
-    lval_del(args);
-    return lval_err(LERR_TOO_FEW_ARGS("if"));
-  }
+  ASSERT_TRUE_OR_RETURN(args->count <= 3, args,
+			"Function %s expected no more than %d arguments recieved %d",
+			"if", 3, args->count);
 
   if (args->exprs[0]->type == LVAL_ERR) {
     return lval_take(args, 0);
@@ -616,10 +575,15 @@ lval* builtin_if(env* e, lval* args) {
 
   // the expressions to execute based on the condition have
   // to be qexprs
-  if ((args->exprs[1]->type != LVAL_QEXPR) ||
-      ((args->count == 3) && (args->exprs[2]->type != LVAL_QEXPR))) {
-    lval_del(args);
-    return lval_err(LERR_INCORRECT_ARGS_TYPES("if"));    
+  ASSERT_TRUE_OR_RETURN(args->exprs[1]->type == LVAL_QEXPR, args,
+			T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			"if",
+			lval_typename(LVAL_QEXPR), lval_typename(args->exprs[1]->type));
+  if (args->count == 3) {
+    ASSERT_TRUE_OR_RETURN(args->exprs[2]->type == LVAL_QEXPR, args,
+			  T_ERROR_FUNC_INCORRECT_ARG_TYPE,
+			  "if",
+			  lval_typename(LVAL_QEXPR), lval_typename(args->exprs[2]->type));
   }
 
   lval* result;
@@ -676,11 +640,18 @@ lval* lval_str(char* str) {
   return v;
 }
 
-lval* lval_err(char* msg) {
+lval* lval_err(char* msgFormat, ...) {
   lval* v = malloc(sizeof(lval));
   v->type = LVAL_ERR;
-  v->error = malloc(strlen(msg) + 1);
-  strcpy(v->error, msg);
+
+  va_list va;
+  va_start(va, msgFormat);
+
+  v->error = malloc(512);
+  vsnprintf(v->error, 511, msgFormat, va);
+  v->error = realloc(v->error, strlen(v->error) + 1);
+
+  va_end(va);
   return v;
 }
 
@@ -948,6 +919,27 @@ void lval_print_expr(lval* val, char openChar, char closeChar) {
   putchar(closeChar);
 }
 
+char* lval_typename(int typeEnum) {
+  switch(typeEnum) {
+  case LVAL_ERR:
+    return "Error";
+  case LVAL_NUM:
+    return "Number";
+  case LVAL_STR:
+    return "String";
+  case LVAL_SYM:
+    return "Symbol";
+  case LVAL_FUNC:
+    return "Function";
+  case LVAL_SEXPR:
+    return "S-Expression";
+  case LVAL_QEXPR:
+    return "Q-Expression";
+  default:
+    return "Unknown";
+  }
+}
+
 env* env_create(env* parent) {
   env* e = malloc(sizeof(env));
   e->parent = parent;
@@ -1016,6 +1008,6 @@ lval* env_get(env* e, lval* key) {
   if (e->parent) {
     return env_get(e->parent, key);
   } else {
-    return lval_err(LERR_UNDEFINED_SYMBOL);    
+    return lval_err(T_ERROR_UNDEFINED_SYMBOL, key->symbol);
   }
 }
